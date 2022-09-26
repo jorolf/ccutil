@@ -1,0 +1,27 @@
+name: Packager
+
+on:
+  push:
+    branches: [ "main" ]
+
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Package lua files
+        uses: thedoctor0/zip-release@0.6.2
+        with:
+          type: "zip"
+          filename: "ccutil.zip"
+          exclusions: "*.git* *.md"
+
+      - name: Release zip file
+        uses: fnkr/github-action-ghr@v1.3
+        env:
+          GHR_PATH: ccutil.zip
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
