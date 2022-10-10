@@ -1,6 +1,6 @@
 --[[
     This module represents the client side of the sync protocol.
-    
+
     The returned table represents the client.
 ]]
 
@@ -9,7 +9,7 @@ local SYNC_REQUEST = "SYNC_REQUEST" -- Client -> Server
 local SYNC_RESPOND = "SYNC_RESPOND" -- Server -> Client
 
 local expect = require("cc.expect").expect
-local utilities = require("ccutil.utilities")
+local utilities = require("utilities")
 
 local SyncClient = {}
 local cache_key, host_key, port_key, keys_key = {}, {}, {}, {}
@@ -100,15 +100,19 @@ function SyncClient:connect(host, port, timeout)
     expect(3, port, "string")
 
     if type(host) == "string" then
-        local end_time = os.clock() + timeout
-        while os.clock() < end_time do
+        local end_time = nil
+        if timeout then
+            end_time = os.clock() + timeout
+        end
+
+        while not end_time or os.clock() < end_time do
             host = rednet.lookup(SYNC_REQUEST, host)
             if host ~= nil then
                 break
             end
         end
 
-        if host == nil then
+        if type(host) ~= "number" then
             error("Lookup failed")
         end
     end
@@ -157,7 +161,7 @@ local function receive(self)
     end
 end
 
---[[ 
+--[[
     Unregisters all tables from updates and releases all resources.
     Using tables after unregistering them is undefined behavior.
 ]]

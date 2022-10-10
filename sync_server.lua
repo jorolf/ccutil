@@ -9,7 +9,7 @@ local SYNC_REQUEST = "SYNC_REQUEST" -- Client -> Server
 local SYNC_RESPOND = "SYNC_RESPOND" -- Server -> Client
 
 local expect = require("cc.expect").expect
-local utilities = require("ccutil.utilities")
+local utilities = require("utilities")
 
 local SyncServer = {}
 local cache_key, port_key, keys_key = {}, {}, {}
@@ -57,7 +57,7 @@ local function synchronizedSet(tbl, key, value)
     }
 
     for host, _ in pairs(sync_server.connected_clients[tbl[port_key]]) do
-        rednet.send(host, request, SYNC_RESPOND)
+        rednet.send(host, response, SYNC_RESPOND)
     end
 end
 
@@ -84,7 +84,7 @@ sync_table = {
 -- Event loop to receive table updates and distribute them, needs to run (in a coroutine) and never returns
 local function serve(self)
     while true do
-        other_host, request = rednet.receive(SYNC_REQUEST)
+        local other_host, request = rednet.receive(SYNC_REQUEST)
         if request.keys ~= nil and request.port ~= nil then
             local object = self.ports[request.port]
 
