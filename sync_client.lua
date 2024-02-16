@@ -16,15 +16,6 @@ local cache_key, host_key, port_key, keys_key = {}, {}, {}, {}
 
 local sync_table
 
--- Meta functions for the synchronized table
-local function synchronizedPairs(table)
-    return pairs(table[cache_key])
-end
-
-local function synchronizedLen(table)
-    return #table[cache_key]
-end
-
 --[[ 
     Create a synchronized table
     tbl - The cache
@@ -38,6 +29,10 @@ local function synchronizedTable(tbl, host, port, keys)
     expect(3, port, "string")
     expect(4, keys, "table")
 
+    if os.getComputerID() == host then
+        printError("synchronized local table: "..port)
+    end
+
     return setmetatable({
         [cache_key] = tbl,
         [host_key] = host,
@@ -46,11 +41,42 @@ local function synchronizedTable(tbl, host, port, keys)
     }, sync_table)
 end
 
+-- Meta functions for the synchronized table
+local function synchronizedPairs(table)
+    local next, tbl_p, start = pairs(table[cache_key])
+
+    function synchronizedNext(tbl_n, k_n)
+        local k, value = next(tbl_n, k_n)
+
+        if type(value) == "table" then
+            value = synchronizedTable(value, table[host_key], table[port_key], utilities.cloneInsert(table[keys_key], k))
+        end
+
+        return k, value
+    end
+
+    return next, tbl_p, start
+end
+
+local function synchronizedLen(table)
+    return #table[cache_key]
+end
+
 -- Update a value in the synchronized table and notify the server
 local function synchronizedSet(tbl, key, value)
     expect(1, tbl, "table")
 
-    tbl[cache_key][key] = value
+    local cache_meta = getmetatable(tbl[cache_key])
+    local cached_value = rawget(tbl[cache_key], key)
+    if cached_value == nil and cache_meta ~= nil then
+        cache_meta.__newindex(tbl, key, value)
+    else
+        tbl[cache_key][key] = value
+    end
+
+    if cached_value == rawget(tbl[cache_key], key) then
+        return
+    end
 
     rednet.send(tbl[host_key], {
         port = tbl[port_key],
@@ -59,10 +85,12 @@ local function synchronizedSet(tbl, key, value)
         value = value,
     }, SYNC_REQUEST)
 
-    local successful, message = rednet.receive(SYNC_RESPOND, 1)
+    local host_id, message = rednet.receive(SYNC_RESPOND, 1)
 
-    if not successful or type(message) == "string" then
-        error("Could not update object: "..message)
+    if host_id == nil then
+        printError("Could not update object: "..tbl[host_key]..":"..tbl[port_key].." did not respond!", 2)
+    elseif type(message) == "string" then
+        printError("Could not update object: "..tostring(message), 2)
     end
 end
 
@@ -99,25 +127,31 @@ function SyncClient:connect(host, port, timeout)
     expect(2, host, "string", "number")
     expect(3, port, "string")
 
-    if type(host) == "string" then
+    local host_id = host
+
+    if type(host_id) == "string" then
         local end_time = nil
         if timeout then
             end_time = os.clock() + timeout
         end
 
         while not end_time or os.clock() < end_time do
-            host = rednet.lookup(SYNC_REQUEST, host)
-            if host ~= nil then
+            host_id = rednet.lookup(SYNC_REQUEST, host)
+            if host_id ~= nil then
                 break
             end
         end
 
-        if type(host) ~= "number" then
+        if type(host_id) ~= "number" then
             error("Lookup failed")
         end
     end
 
-    rednet.send(host, {
+    if os.getComputerID() == host_id then
+        error("Tried to connect to the current computer ("..host..")", 2)
+    end
+
+    rednet.send(host_id, {
         port = port,
         keys = {},
     }, SYNC_REQUEST)
@@ -130,10 +164,10 @@ function SyncClient:connect(host, port, timeout)
         error("Server didn't return a table")
     end
 
-    self.tables[host] = self.tables[host] or {}
-    self.tables[host][port] = value
+    self.tables[host_id] = self.tables[host_id] or {}
+    self.tables[host_id][port] = value
 
-    value = synchronizedTable(value, host, port, {})
+    value = synchronizedTable(value, host_id, port, {})
 
     return value
 end
@@ -142,7 +176,9 @@ end
 -- Event loop to receive table updates, needs to run (in a coroutine) and never returns
 local function receive(self)
     while true do
-        other_host, request = rednet.receive(SYNC_RESPOND)
+        local other_host, request = rednet.receive(SYNC_RESPOND)
+        -- print("Response: ", textutils.serialise(request))
+
         if self.tables[other_host] and type(request) == "table" and request.keys ~= nil and request.port ~= nil and request.key ~= nil and request.value ~= nil then
             local object = self.tables[other_host][request.port]
 
@@ -155,6 +191,8 @@ local function receive(self)
             end
 
             if type(object) == "table" then
+                print("Updated", request.key, "for port", request.port)
+
                 object[request.key] = request.value
             end
         end

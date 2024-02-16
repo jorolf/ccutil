@@ -55,4 +55,33 @@ function utilities.removeAllValues(list, value)
     end
 end
 
+--[[
+    Removes all occurences of a value where a predicate matches and returns them
+]]
+function utilities.removeAllValueIf(list, predicate)
+    expect(1, list, "table")
+    expect(2, predicate, "function")
+
+    local removed_values = {}
+
+    local overwrite_index = 1
+    for current_index, current_value in ipairs(list) do
+        if predicate(current_value) then
+            table.insert(removed_values, current_value)
+        else
+            if overwrite_index ~= current_index then
+                list[overwrite_index] = list[current_index]
+            end
+
+            overwrite_index = overwrite_index + 1
+        end
+    end
+
+    for index = overwrite_index, #list do
+        list[index] = nil
+    end
+
+    return removed_values
+end
+
 return utilities

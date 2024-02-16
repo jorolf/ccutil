@@ -47,7 +47,19 @@ end
 local function synchronizedSet(tbl, key, value)
     expect(1, tbl, "table")
 
-    tbl[cache_key][key] = value
+    local cache_meta = getmetatable(tbl[cache_key])
+    local cached_value = rawget(tbl[cache_key], key)
+    if cached_value == nil and cache_meta ~= nil then
+        cache_meta.__newindex(tbl, key, value)
+    else
+        tbl[cache_key][key] = value
+    end
+
+    if cached_value == rawget(tbl[cache_key], key) then
+        return
+    end
+
+    -- tbl[cache_key][key] = value
 
     local response = {
         port = tbl[port_key],

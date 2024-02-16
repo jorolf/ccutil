@@ -12,14 +12,17 @@
 
 local id = 0
 
-if os.getComputerLabel() == nil then
-    return function()
-        id = id + 1
-        return os.getComputerID() .. ":" .. id
-    end
-else
-    return function()
-        id = id + 1
-        return os.getComputerLabel() .. ":" .. id
-    end
+-- Splits the id into its parts: the global computer id and the specific local id
+local function splitId(id)
+    return string.match(id, "([^:]+):([^:]+)")
 end
+
+local function makeId()
+    id = id + 1
+    return os.getComputerID() .. ":" .. id
+end
+
+return {
+    makeId = makeId,
+    splitId = splitId,
+}
